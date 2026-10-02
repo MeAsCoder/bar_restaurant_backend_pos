@@ -1,5 +1,11 @@
-node_modules
-infinity.db
-infinity.db-wal
-infinity.db-shm
+﻿node_modules/
 .env
+.env.local
+dist/
+build/
+__pycache__/
+*.pyc
+venv/
+.venv/
+*.log
+.DS_Store
