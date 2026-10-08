@@ -2,6 +2,11 @@
  * Seeds roles, default users, categories, and the product catalogue
  * transcribed from the "Infinity Liquors" manual stock book photos.
  *
+ * OPENING STOCK: every newly created product is seeded with
+ * OPENING_STOCK_UNITS full units (bottles, or pieces for unit-less items).
+ * Inventory is tracked in ml, so the ledger entry is
+ * OPENING_STOCK_UNITS * volume_ml (piece products have volume_ml = 1).
+ *
  * IMPORTANT: prices below are PLACEHOLDERS (a simple formula based on
  * bottle size), because the stock book photos record quantities, not
  * prices. The margin scribbles in the photo (1000, 350, 150, 660...) are
@@ -13,11 +18,15 @@
  * that already exist — for renaming an already-seeded live user, use
  * src/scripts/renameUser.js instead.
  *
- * Run: npm run seed   (safe to re-run; it skips rows that already exist)
+ * Run: npm run seed   (safe to re-run; it skips rows that already exist,
+ * so opening stock is never added twice to an existing product)
  */
 const db = require('./db');
 const { hashPassword } = require('./auth');
 const { appendInventoryLedger, writeAudit } = require('./ledger');
+
+// Opening quantity per product (bottles, or pieces for unit-less items)
+const OPENING_STOCK_UNITS = 10;
 
 const PERMISSIONS = {
   SUPER_ADMIN: ['*'],
@@ -205,11 +214,15 @@ function seedProducts(users) {
           `).run(suInfo.lastInsertRowid, u.price, u.cost, users.superAdmin.id);
         }
 
-        // Opening stock = 0. Admin should do an initial stock receipt / stocktake
-        // to bring the digital ledger in line with the physical shop count.
+        // Opening stock = OPENING_STOCK_UNITS full units (bottles/pieces), recorded in ml.
         appendInventoryLedger({
-          productId, changeMl: 0, reason: 'ADJUSTMENT', refType: 'SEED', refId: null,
-          userId: users.superAdmin.id, notes: 'Initial product creation (opening stock = 0, set via stock receipt or stocktake)',
+          productId,
+          changeMl: OPENING_STOCK_UNITS * volumeMl,
+          reason: 'ADJUSTMENT',
+          refType: 'SEED',
+          refId: null,
+          userId: users.superAdmin.id,
+          notes: `Opening stock seeded: ${OPENING_STOCK_UNITS} x ${size ? size + 'ML bottle' : 'piece'}`,
         });
       }
     }
@@ -237,7 +250,13 @@ function main() {
 
   const created = seedProducts({ superAdmin });
 
-  writeAudit({ event: 'SYSTEM_SEED', userId: superAdmin.id, role: 'SUPER_ADMIN', entityType: 'SYSTEM', reason: `Seeded ${created} products, ${3} roles, ${4} users` });
+  writeAudit({
+    event: 'SYSTEM_SEED',
+    userId: superAdmin.id,
+    role: 'SUPER_ADMIN',
+    entityType: 'SYSTEM',
+    reason: `Seeded ${created} products (opening stock ${OPENING_STOCK_UNITS} units each), ${3} roles, ${4} users`,
+  });
 
   console.log(`Seed complete.`);
   console.log(`  Roles:   SUPER_ADMIN, ADMIN, WAITER`);
@@ -246,9 +265,9 @@ function main() {
   console.log(`           Dama / Dama123           (Waiter)`);
   console.log(`           Joy / Joy254              (Waiter)`);
   console.log(`  Products created: ${created}`);
-  console.log(`  NOTE: opening stock is 0 for all products and prices are placeholders.`);
-  console.log(`  Log in as admin -> Stock Receiving (or Stocktake) to set real starting stock,`);
-  console.log(`  and Admin -> Products to correct prices before going live.`);
+  console.log(`  NOTE: every new product was seeded with ${OPENING_STOCK_UNITS} units of opening stock`);
+  console.log(`  and prices are placeholders. Do a Stocktake to match real shop counts,`);
+  console.log(`  and correct prices in Admin -> Products before going live.`);
 }
 
 main();
